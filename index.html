@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Чат</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#0f766e">
+<style>
+:root{--bg:#f5f6f4;--fg:#18211f;--mut:#6b7774;--card:#fff;--line:#dfe3e0;--acc:#0f766e;--onacc:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#101615;--fg:#e8eeec;--mut:#8a9895;--card:#1a2221;--line:#2a3533;--acc:#2dd4bf;--onacc:#06201d}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg)}
+.v{display:none;height:100%;max-width:640px;margin:auto;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.v.on{display:flex}
+header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0;flex:1;font-weight:650}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:var(--acc);color:var(--onacc);cursor:pointer}
+button.g{background:transparent;color:var(--acc)}
+input{font:inherit;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.box{padding:24px 18px;display:flex;flex-direction:column;gap:10px;margin:auto 0}
+.box h1{font-size:28px;margin:0 0 6px}
+.row{display:flex;gap:8px;padding:12px 14px}
+.err{color:#c2410c;min-height:1.4em;font-size:14px}
+.sc{flex:1;overflow:auto}
+.it{display:block;width:100%;text-align:left;background:var(--card);color:var(--fg);border-radius:0;border-bottom:1px solid var(--line);padding:14px}
+.lb{padding:14px 14px 6px;color:var(--mut);font-size:14px}
+#msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:80%;padding:8px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line);align-self:flex-start;white-space:pre-wrap;overflow-wrap:anywhere}
+.m.me{align-self:flex-end;background:var(--acc);color:var(--onacc);border-color:var(--acc)}
+.em{color:var(--mut);padding:14px;text-align:center}
+</style></head><body>
+
+<section id="auth" class="v"><div class="box">
+<h1>Чат один на один</h1>
+<input id="em" type="email" placeholder="Почта" autocomplete="email">
+<input id="pw" type="password" placeholder="Пароль, минимум 6 символов" autocomplete="current-password">
+<input id="un" placeholder="Имя для регистрации (латиница, цифры, _)" autocapitalize="none">
+<div class="err" id="aerr"></div>
+<button id="login">Войти</button>
+<button id="signup" class="g">Создать аккаунт</button>
+</div></section>
+
+<section id="list" class="v">
+<header><h1 id="me"></h1><button id="out" class="g">Выйти</button></header>
+<div class="row"><input id="q" placeholder="Найти человека по имени" autocapitalize="none"><button id="find">Найти</button></div>
+<div class="sc"><div id="res"></div><div class="lb">Ваши переписки</div><div id="chats"></div></div>
+</section>
+
+<section id="chat" class="v">
+<header><button id="back" class="g">Назад</button><h1 id="who"></h1></header>
+<div id="msgs"></div>
+<div class="row"><input id="txt" placeholder="Сообщение" maxlength="4000" autocomplete="off"><button id="send">Отправить</button></div>
+</section>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import{getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import{getFirestore,doc,getDoc,setDoc,collection,query,where,orderBy,limit,onSnapshot,addDoc,getDocs,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+const app=initializeApp({apiKey:"AIzaSyDdVprKnuJQSlmLr1bl30Qiy9vm8RuvIfc",authDomain:"chat-for-two-37e11.firebaseapp.com",projectId:"chat-for-two-37e11",storageBucket:"chat-for-two-37e11.firebasestorage.app",messagingSenderId:"831511126064",appId:"1:831511126064:web:d091ef4a90b253019e4df5"});
+const auth=getAuth(app),db=getFirestore(app),$=s=>document.querySelector(s);
+let me,myName,chatId,offList,offMsgs,busy=false;
+const show=id=>{document.querySelectorAll(".v").forEach(v=>v.classList.toggle("on",v.id===id))};
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const errMsg=e=>({"auth/invalid-credential":"Неверная почта или пароль.","auth/email-already-in-use":"Эта почта уже зарегистрирована.","auth/weak-password":"Пароль короче 6 символов.","auth/invalid-email":"Некорректная почта."}[e.code]||"Не получилось: "+(e.code||e.message));
+
+$("#login").onclick=async()=>{$("#aerr").textContent="";try{await signInWithEmailAndPassword(auth,$("#em").value.trim(),$("#pw").value)}catch(e){$("#aerr").textContent=errMsg(e)}};
+$("#signup").onclick=async()=>{
+  const un=$("#un").value.trim(),a=$("#aerr");a.textContent="";
+  if(!/^[a-z0-9_]{3,20}$/i.test(un)){a.textContent="Имя: 3–20 символов, латиница, цифры, _.";return}
+  busy=true;
+  try{
+    const c=await createUserWithEmailAndPassword(auth,$("#em").value.trim(),$("#pw").value);
+    const t=await getDocs(query(collection(db,"users"),where("usernameLower","==",un.toLowerCase()),limit(1)));
+    if(!t.empty){await c.user.delete();busy=false;a.textContent="Это имя занято, выберите другое.";return}
+    await setDoc(doc(db,"users",c.user.uid),{username:un,usernameLower:un.toLowerCase()});
+    busy=false;await enter(c.user);
+  }catch(e){busy=false;a.textContent=errMsg(e)}
+};
+$("#out").onclick=()=>signOut(auth);
+onAuthStateChanged(auth,u=>{if(busy)return;if(u)enter(u);else{offList&&offList();offMsgs&&offMsgs();show("auth")}});
+
+async function enter(u){
+  me=u;const s=await getDoc(doc(db,"users",u.uid));
+  if(s.exists())myName=s.data().username;
+  else{myName="user"+u.uid.slice(0,5);await setDoc(doc(db,"users",u.uid),{username:myName,usernameLower:myName})}
+  $("#me").textContent=myName;show("list");
+  offList&&offList();
+  offList=onSnapshot(query(collection(db,"chats"),where("members","array-contains",u.uid)),s=>{
+    const box=$("#chats");box.replaceChildren();
+    if(s.empty)box.append(el("div","em","Пока пусто. Найдите человека по имени и напишите ему."));
+    s.forEach(d=>{const m=d.data(),o=m.members.find(x=>x!==u.uid),b=el("button","it",m.names[o]||"Без имени");b.onclick=()=>openChat(o,m.names[o]);box.append(b)});
+  });
+}
+$("#find").onclick=async()=>{
+  const q=$("#q").value.trim().toLowerCase(),box=$("#res");box.replaceChildren();if(!q)return;
+  const s=await getDocs(query(collection(db,"users"),where("usernameLower",">=",q),where("usernameLower","<=",q+"\uf8ff"),limit(10)));
+  let n=0;
+  s.forEach(d=>{if(d.id===me.uid)return;n++;const b=el("button","it","Написать: "+d.data().username);b.onclick=()=>openChat(d.id,d.data().username);box.append(b)});
+  if(!n)box.append(el("div","em","Никого не нашли. Проверьте имя."));
+};
+async function openChat(o,name){
+  chatId=[me.uid,o].sort().join("_");const ref=doc(db,"chats",chatId);
+  if(!(await getDoc(ref)).exists())await setDoc(ref,{members:[me.uid,o],names:{[me.uid]:myName,[o]:name}});
+  $("#who").textContent=name;show("chat");offMsgs&&offMsgs();
+  offMsgs=onSnapshot(query(collection(db,"chats",chatId,"messages"),orderBy("createdAt")),s=>{
+    const b=$("#msgs");b.replaceChildren();
+    s.forEach(d=>{const m=d.data();b.append(el("div","m"+(m.senderId===me.uid?" me":""),m.text))});
+    b.scrollTop=b.scrollHeight;
+  });
+}
+$("#back").onclick=()=>{offMsgs&&offMsgs();show("list")};
+async function send(){const t=$("#txt").value.trim();if(!t)return;$("#txt").value="";
+  await addDoc(collection(db,"chats",chatId,"messages"),{text:t,senderId:me.uid,createdAt:serverTimestamp()})}
+$("#send").onclick=send;$("#txt").onkeydown=e=>{if(e.key==="Enter")send()};
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
+</script></body></html>
