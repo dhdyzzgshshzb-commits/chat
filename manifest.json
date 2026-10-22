@@ -1,6 +1,6 @@
 {
-  "name": "Чат",
-  "short_name": "Чат",
+  "name": "Golden Chat",
+  "short_name": "Golden Chat",
   "description": "Личный чат для двоих: переписка и звонки один на один.",
   "lang": "ru",
   "id": "./",
@@ -11,28 +11,22 @@
   "theme_color": "#0f766e",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icon-teal-shadow-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon-teal-shadow-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-maskable-512.png",
+      "src": "icon-teal-shadow-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
     }
   ]
 }
